@@ -18,7 +18,7 @@ export default function AppLayout() {
                 >
 
                     <h4>
-                        NUX
+                        NÜX STUDIO
                     </h4>
 
                     <hr />

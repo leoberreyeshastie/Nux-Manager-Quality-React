@@ -1,15 +1,22 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { CatalogosProvider } from './context/CatalogosContext.jsx';
+import { ExpedientesProvider } from './context/ExpedientesContext.jsx';
+import App from './App.jsx';
+import './index.css';
 
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
-
-import App from './App';
-
-ReactDOM.createRoot(
-  document.getElementById('root')
-).render(
+ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AuthProvider>
+        <CatalogosProvider>
+          <ExpedientesProvider>
+            <App />
+          </ExpedientesProvider>
+        </CatalogosProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );
