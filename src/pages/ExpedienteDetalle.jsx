@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useExpedientes } from '../context/ExpedientesContext';
-import { useCatalogos } from '../context/CatalogosContext';
+import { useCatalogos} from '../context/CatalogosContext';
 import { useAuth } from '../context/AuthContext';
 import { uploadEvidencia, deleteEvidencia } from '../services/evidenciasService';
 import { compressImage } from '../lib/compressImage';
@@ -33,6 +33,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+
+
 
 const ESTADO_BADGE = {
   ABIERTO: { variant: 'info', label: 'Abierto' },
@@ -332,16 +334,17 @@ export default function ExpedienteDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { expedienteActual, cargarExpedienteActual, actualizarExpediente, anularExpediente, loading } = useExpedientes();
-  const { catalogos, loading: catalogosLoading } = useCatalogos();
+  const { catalogos, loading: catalogosLoading, getCatalogoNombre } = useCatalogos();
   const { user } = useAuth();
-
+  
   const [msg, setMsg] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editData, setEditData] = useState({});
   const [hallazgoModalOpen, setHallazgoModalOpen] = useState(false);
   const [editingHallazgo, setEditingHallazgo] = useState(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
-
+  
+ 
   useEffect(() => {
     if (id) {
       cargarExpedienteActual(id);
@@ -456,13 +459,6 @@ export default function ExpedienteDetalle() {
     } catch (error) {
       showMsg('danger', error.message);
     }
-  };
-
-  const getCatalogoNombre = (tipo, id) => {
-    if (!id) return '—';
-    const items = catalogos[tipo] || [];
-    const item = items.find(i => i.id === id);
-    return item ? item.nombre : id; // si no encuentra, devuelve el ID como fallback
   };
 
   // Función para subir evidencia individual (si se hace desde el detalle)
@@ -597,11 +593,11 @@ export default function ExpedienteDetalle() {
                         </span>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 text-sm text-muted-foreground">
-                        <p><span className="font-medium">Proceso:</span> {getCatalogoNombre('PROCESOS', hallazgo.proceso_id)}</p>
-                        <p><span className="font-medium">Máquina:</span> {getCatalogoNombre('MAQUINAS', hallazgo.maquina_id)}</p>
-                        <p><span className="font-medium">Defecto:</span> {getCatalogoNombre('DEFECTOS', hallazgo.defecto_id)}</p>
-                        <p><span className="font-medium">Categoría:</span> {getCatalogoNombre('CATEGORIAS', hallazgo.categoria_id)}</p>
-                        <p><span className="font-medium">Acción:</span> {getCatalogoNombre('ACCIONES', hallazgo.accion_id)}</p>
+                        <p><span className="font-medium">Proceso:</span> {getCatalogoNombre(hallazgo.proceso_id)}</p>
+                        <p><span className="font-medium">Máquina:</span> {getCatalogoNombre(hallazgo.maquina_id)}</p>
+                        <p><span className="font-medium">Defecto:</span> {getCatalogoNombre(hallazgo.defecto_id)}</p>
+                        <p><span className="font-medium">Categoría:</span> {getCatalogoNombre(hallazgo.categoria_id)}</p>
+                        <p><span className="font-medium">Acción:</span> {getCatalogoNombre(hallazgo.accion_id)}</p>
                         <p><span className="font-medium">Detectadas:</span> {hallazgo.piezas_detectadas || 0}</p>
                         <p><span className="font-medium">Recuperadas:</span> {hallazgo.piezas_recuperadas || 0}</p>
                         <p><span className="font-medium">Rechazadas:</span> {hallazgo.piezas_rechazadas || 0}</p>

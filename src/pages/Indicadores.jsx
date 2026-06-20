@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { BarChart2, Calculator, Loader2 } from 'lucide-react';
+import { useCatalogos } from '../context/CatalogosContext';
 
 function getMonthlyMetrics(exps, mes, anio) {
   const filtered = exps.filter(e => e.estado !== 'ANULADO' && e.mes_produccion === mes && e.anio_produccion === anio);
@@ -41,6 +42,7 @@ function getParetoDefectos(exps, mes, anio) {
 }
 
 function getParetoProcesos(exps, mes, anio) {
+
   const resumen = {};
   exps.filter(e => e.estado !== 'ANULADO' && e.mes_produccion === mes && e.anio_produccion === anio)
     .forEach(exp => (exp.hallazgos || []).forEach(h => {
@@ -102,6 +104,8 @@ function DataTable({ title, cols, rows }) {
 
 export default function Indicadores() {
   const { expedientes, loading } = useExpedientes();
+  const { catalogosMap } = useCatalogos();
+
   const [mes, setMes] = useState(String(new Date().getMonth() + 1));
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [resultado, setResultado] = useState(null);
@@ -199,9 +203,9 @@ export default function Indicadores() {
           </Card>
 
           <DataTable title="Pareto de Defectos" cols={['Defecto', 'Piezas']}
-            rows={resultado.paretoDefectos.map(r => [r.defecto, r.total])} />
+            rows={resultado.paretoDefectos.map(r => [catalogosMap[r.defecto] || r.defecto,r.total])} />
           <DataTable title="Pareto por Proceso" cols={['Proceso', 'Piezas']}
-            rows={resultado.paretoProcesos.map(r => [r.proceso, r.total])} />
+            rows={resultado.paretoProcesos.map(r => [catalogosMap[r.proceso] || r.proceso,r.total])} />
           <DataTable title="Top Órdenes con Más Incidencias" cols={['Orden', 'Cliente', 'Producto', 'Incidencias']}
             rows={resultado.topOrders.map(r => [r.codigoOrden, r.cliente, r.producto, r.defectos])} />
           <DataTable title="Top Calidad" cols={['Orden', 'Calidad']}

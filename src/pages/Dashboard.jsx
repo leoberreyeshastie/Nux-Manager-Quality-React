@@ -5,6 +5,7 @@ import {
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { useExpedientes } from '../context/ExpedientesContext';
+import  { useCatalogos } from  '../context/CatalogosContext.jsx'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import {
   FolderOpen, FolderCheck, Package, AlertTriangle,
@@ -75,6 +76,7 @@ const CHART_OPTIONS = {
 
 export default function Dashboard() {
   const { expedientes, loading } = useExpedientes();
+  const { catalogosMap } = useCatalogos();
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -115,7 +117,7 @@ export default function Dashboard() {
   };
 
   const paretoData = {
-    labels: pareto.length ? pareto.map(p => p.defecto) : ['Sin datos'],
+    labels: pareto.length ? pareto.map(p => catalogosMap[p.defecto]) : ['Sin datos'],
     datasets: [{
       label: 'Piezas Detectadas',
       data: pareto.length ? pareto.map(p => p.cantidad) : [0],
