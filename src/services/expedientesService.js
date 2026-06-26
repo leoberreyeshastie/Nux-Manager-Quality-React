@@ -88,59 +88,16 @@ export async function createExpediente(expedienteData) {
   return await getExpedienteById(expedienteId);
 }
 
-// Actualizar expediente (incluyendo hallazgos y evidencias)
 export async function updateExpediente(id, updates) {
-  // Separar hallazgos y evidencias del resto
+  // Solo actualizar el expediente, ignorar hallazgos
   const { hallazgos, ...expedienteUpdates } = updates;
-
-  // 1. Actualizar expediente
-  const { error: errExp } = await supabase
+  const { error } = await supabase
     .from('expedientes')
     .update(expedienteUpdates)
     .eq('id', id);
 
-  if (errExp) throw errExp;
-
-  // 2. Manejar hallazgos (borrar los existentes y reinsertar? o actualizar individualmente)
-  // Para simplificar, borramos todos los hallazgos del expediente y los reinsertamos
-  // O podemos hacer un upsert con lógica más fina. Por ahora, reemplazamos:
-  if (hallazgos !== undefined) {
-    // Eliminar hallazgos actuales (y sus evidencias por cascade)
-    const { error: errDel } = await supabase
-      .from('hallazgos')
-      .delete()
-      .eq('expediente_id', id);
-
-    if (errDel) throw errDel;
-
-    // Reinsertar nuevos hallazgos
-    for (const h of hallazgos) {
-      const { evidencias, ...hallazgo } = h;
-      hallazgo.expediente_id = id;
-
-      const { data: hallazgoInsertado, error: errHal } = await supabase
-        .from('hallazgos')
-        .insert([hallazgo])
-        .select()
-        .single();
-
-      if (errHal) throw errHal;
-
-      const hallazgoId = hallazgoInsertado.id;
-
-      if (evidencias && evidencias.length > 0) {
-        for (const ev of evidencias) {
-          ev.hallazgo_id = hallazgoId;
-          const { error: errEv } = await supabase
-            .from('evidencias')
-            .insert([ev]);
-
-          if (errEv) throw errEv;
-        }
-      }
-    }
-  }
-
+  if (error) throw error;
+  
   return await getExpedienteById(id);
 }
 

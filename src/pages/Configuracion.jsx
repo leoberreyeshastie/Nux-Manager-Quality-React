@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCatalogos } from '../context/CatalogosContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Settings, Database, Pencil, Trash2, Plus, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { toast, confirm, errorAlert, ReactSwal } from '../lib/sweetAlert';
 import { getTiposCatalogo } from '../services/catalogosService';
 
 // Componente Toast local (similar al de Expedientes)
@@ -103,9 +104,10 @@ function ItemFormModal({ open, onClose, editingItem, onSave, loading }) {
     codigo: editingItem?.codigo || '',
     descripcion: editingItem?.descripcion || '',
   });
+  
 
   // Si editingItem cambia, actualizar el formulario
-  useState(() => {
+  useEffect(() => {
     if (editingItem) {
       setForm({
         nombre: editingItem.nombre || '',
@@ -119,7 +121,7 @@ function ItemFormModal({ open, onClose, editingItem, onSave, loading }) {
 
   const handleSubmit = () => {
     if (!form.nombre.trim()) {
-      alert('El nombre es obligatorio');
+      toast("error", "Debes insertar un nombre!");
       return;
     }
     onSave(form);
@@ -201,11 +203,7 @@ export default function Configuracion() {
       .finally(() => setTiposLoading(false));
   }, []);
 
-  // Mostrar mensajes
-  const showMsg = (type, text) => {
-    setMsg({ type, text });
-    setTimeout(() => setMsg(null), 5000);
-  };
+
 
   // Manejar selección de tipo
   const handleSelectTipo = (tipo) => {
@@ -228,6 +226,15 @@ export default function Configuracion() {
   const handleSave = async (formData) => {
     setSaving(true);
     try {
+      // Mostrar loading
+      ReactSwal.fire({
+        title: 'Guardando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
+      });
+      
       if (editingItem) {
         // Editar
         await actualizarItem(editingItem.id, {
@@ -235,7 +242,8 @@ export default function Configuracion() {
           codigo: formData.codigo,
           descripcion: formData.descripcion,
         });
-        showMsg('success', 'Item actualizado correctamente');
+        ReactSwal.close();
+        toast('success', 'Item actualizado correctamente');
       } else {
         // Crear
         await crearItem(tipoSeleccionado.id, {
@@ -243,14 +251,15 @@ export default function Configuracion() {
           codigo: formData.codigo,
           descripcion: formData.descripcion,
         });
-        showMsg('success', 'Item creado correctamente');
+        ReactSwal.close();
+        toast('success', 'Item creado correctamente');
       }
       setModalOpen(false);
       setEditingItem(null);
       // Opcional: recargar la lista de tipos para actualizar el sidebar (aunque no cambian)
       // Podemos recargar los tipos si se agregó uno nuevo, pero eso no sucede aquí.
     } catch (error) {
-      showMsg('danger', error.message || 'Error al guardar');
+      await errorAlert('Error al guardar', error.message);
     } finally {
       setSaving(false);
     }
@@ -258,12 +267,28 @@ export default function Configuracion() {
 
   // Eliminar
   const handleDelete = async (item) => {
-    if (!window.confirm(`¿Eliminar ${item.nombre}?`)) return;
+
+    const result = await confirm(
+      `¿Eliminar ${item.nombre}?`,
+      '¿Estás seguro de que deseas eliminar este item? Esta acción no se puede deshacer.'
+    );
+    if (!result.isConfirmed) return;
     try {
+      // Mostrar loading
+      ReactSwal.fire({
+        title: 'Guardando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
+      });  
+
       await eliminarItem(item.id);
-      showMsg('success', 'Item eliminado');
+      ReactSwal.close();
+      toast('success', 'Item eliminado');
     } catch (error) {
-      showMsg('danger', error.message || 'Error al eliminar');
+      ReactSwal.close();
+      await errorAlert('Error al Eliminar', error.message);
     }
   };
 

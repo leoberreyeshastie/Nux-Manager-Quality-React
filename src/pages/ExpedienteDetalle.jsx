@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useExpedientes } from '../context/ExpedientesContext';
-import { useCatalogos} from '../context/CatalogosContext';
+import { useCatalogos } from '../context/CatalogosContext';
 import { useAuth } from '../context/AuthContext';
+import { updateHallazgo, deleteHallazgo, createHallazgo } from "../services/hallazgosService";
 import { uploadEvidencia, deleteEvidencia } from '../services/evidenciasService';
 import { compressImage } from '../lib/compressImage';
 import { SearchSelect } from '../components/ui/search-select';
@@ -21,6 +22,7 @@ import {
 } from '../components/ui/dialog';
 import {
   Plus,
+  FolderOpen,
   Pencil,
   Trash2,
   Image as ImageIcon,
@@ -31,9 +33,22 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  AlertTriangle,
+  Calendar,
+  Package,
+  User,
+  FileText,
+  Wrench,
+  Cpu,
+  Zap,
+  Layers,
+  Target,
+  RefreshCw,
+  Copy,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
-
+import { cn, formatDateSpanish } from '../lib/utils';
+import { toast, confirm, errorAlert, ReactSwal } from '../lib/sweetAlert';
+import React from 'react';
 
 
 const ESTADO_BADGE = {
@@ -64,10 +79,32 @@ function Toast({ msg, onClose }) {
 
 // Modal para crear/editar hallazgo
 function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteId }) {
-  const [form, setForm] = useState(() => {
-    if (hallazgo) {
-      return {
-        fecha_deteccion: hallazgo.fecha_deteccion || new Date().toISOString().split('T')[0],
+  // Estado inicial por defecto (vacío)
+  const defaultForm = {
+    fecha_deteccion: new Date().toISOString().split('T')[0],
+    proceso_id: '',
+    maquina_id: '',
+    defecto_id: '',
+    categoria_id: '',
+    accion_id: '',
+    piezas_detectadas: 0,
+    piezas_recuperadas: 0,
+    piezas_rechazadas: 0,
+    responsable: '',
+    observaciones: '',
+    estado: 'ABIERTO',
+    evidencias: [],
+  };
+
+  const [form, setForm] = useState(defaultForm);
+  const [uploading, setUploading] = useState(false);
+
+  // Sincronizar el formulario cuando cambia 'hallazgo' o 'open'
+  useEffect(() => {
+    if (open && hallazgo) {
+      // Si hay un hallazgo para editar, cargar sus datos
+      setForm({
+        fecha_deteccion: hallazgo.fecha_deteccion || defaultForm.fecha_deteccion,
         proceso_id: hallazgo.proceso_id || '',
         maquina_id: hallazgo.maquina_id || '',
         defecto_id: hallazgo.defecto_id || '',
@@ -80,42 +117,25 @@ function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteI
         observaciones: hallazgo.observaciones || '',
         estado: hallazgo.estado || 'ABIERTO',
         evidencias: hallazgo.evidencias || [],
-      };
+      });
+    } else if (open && !hallazgo) {
+      // Si es un nuevo hallazgo, resetear a valores por defecto
+      setForm(defaultForm);
     }
-    return {
-      fecha_deteccion: new Date().toISOString().split('T')[0],
-      proceso_id: '',
-      maquina_id: '',
-      defecto_id: '',
-      categoria_id: '',
-      accion_id: '',
-      piezas_detectadas: 0,
-      piezas_recuperadas: 0,
-      piezas_rechazadas: 0,
-      responsable: '',
-      observaciones: '',
-      estado: 'ABIERTO',
-      evidencias: [],
-    };
-  });
-
-  const [uploading, setUploading] = useState(false);
+  }, [open, hallazgo]); // Dependencias: cuando el modal se abre o cambia el hallazgo
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     try {
       setUploading(true);
-      // Comprimir imagen
       const compressed = await compressImage(file, 1024, 0.8);
-      // Crear objeto de evidencia temporal (sin subir aún)
       const newEvidencia = {
         nombre_archivo: compressed.name,
         tamano_kb: Math.round(compressed.size / 1024),
-        archivo: compressed, // guardamos el archivo comprimido para subir después
+        archivo: compressed,
         descripcion: '',
         fecha_captura: new Date().toISOString().split('T')[0],
-        // id temporal para la UI
         tempId: Date.now(),
       };
       setForm(f => ({
@@ -124,7 +144,7 @@ function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteI
       }));
     } catch (error) {
       console.error('Error comprimiendo imagen:', error);
-      alert('Error al procesar la imagen');
+      await errorAlert('Error al comprimir imagen', error.message);
     } finally {
       setUploading(false);
     }
@@ -138,20 +158,18 @@ function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteI
   };
 
   const handleSubmit = async () => {
-    // Validar campos obligatorios
     if (!form.proceso_id || !form.defecto_id) {
-      alert('Selecciona al menos proceso y defecto');
+      toast('error','Selecciona al menos proceso y defecto');
       return;
     }
-    // Llamar a onSave con el objeto hallazgo (incluyendo evidencias)
-    // Las evidencias aún no están subidas; las subiremos en el padre después de guardar el hallazgo
     onSave(form);
     onClose();
   };
 
+  // Función segura para obtener opciones de catálogo
   const catalogoOptions = (codigoTipo) => {
-    const items = catalogos[codigoTipo] || [];
-    return items.map(item => ({ value: item.id, label: item.nombre }));
+    if (!catalogos || !catalogos[codigoTipo]) return [];
+    return catalogos[codigoTipo].map(item => ({ value: item.id, label: item.nombre }));
   };
 
   return (
@@ -333,18 +351,18 @@ function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteI
 export default function ExpedienteDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { expedienteActual, cargarExpedienteActual, actualizarExpediente, anularExpediente, loading } = useExpedientes();
+  const { expedienteActual, cargarExpedienteActual, actualizarExpediente, anularExpediente, refreshExpedienteActual, loading } = useExpedientes();
   const { catalogos, loading: catalogosLoading, getCatalogoNombre } = useCatalogos();
   const { user } = useAuth();
-  
+
   const [msg, setMsg] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editData, setEditData] = useState({});
   const [hallazgoModalOpen, setHallazgoModalOpen] = useState(false);
   const [editingHallazgo, setEditingHallazgo] = useState(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
-  
- 
+
+
   useEffect(() => {
     if (id) {
       cargarExpedienteActual(id);
@@ -362,46 +380,90 @@ export default function ExpedienteDetalle() {
     }
   }, [expedienteActual]);
 
-  const showMsg = (type, text) => {
-    setMsg({ type, text });
-    setTimeout(() => setMsg(null), 5000);
-  };
+  
 
   const handleEditSave = async () => {
     try {
       await actualizarExpediente(id, editData);
-      showMsg('success', 'Expediente actualizado');
+      toast('success', 'Expediente actualizado');
       setEditModalOpen(false);
     } catch (error) {
-      showMsg('danger', error.message);
+      await errorAlert('Error al guardar', error.message);
     }
   };
 
   const handleCloseExpediente = async () => {
-    if (!window.confirm('¿Cerrar este expediente?')) return;
+
+    const result = await confirm(
+      'Cerrar expediente',
+      '¿Estás seguro de que deseas cerrar este expediente? Esta acción no se puede deshacer.'
+    );
+    if (!result.isConfirmed) return;
+
     try {
+      ReactSwal.fire({
+        title: 'Cerrando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
+      });
       await actualizarExpediente(id, { estado: 'CERRADO' });
-      showMsg('success', 'Expediente cerrado');
+      ReactSwal.close();
+      toast('success', 'Expediente cerrado');
     } catch (error) {
-      showMsg('danger', error.message);
+      ReactSwal.close();
+      await errorAlert('Error al guardar', error.message);
     }
   };
 
   const handleAnular = async () => {
-    const motivo = prompt('Motivo de anulación:');
-    if (motivo === null) return;
+  
+    const { value: motivo } = await ReactSwal.fire({
+      title: 'Anular expediente',
+      text: 'Ingresa el motivo de la anulación',
+      input: 'text',
+      inputPlaceholder: 'Escribe el motivo...',
+      showCancelButton: true,
+      confirmButtonText: 'Anular',
+      cancelButtonText: 'Cancelar',
+      inputValidator: (value) => {
+        if (!value) {
+          return 'Debes ingresar un motivo';
+        }
+      }
+    });
+    if (!motivo) return;
     try {
+      ReactSwal.fire({
+        title: 'Anulando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
+      });
+
       await anularExpediente(id, motivo);
-      showMsg('success', 'Expediente anulado');
+      ReactSwal.close();
+      toast('success', 'Expediente anulado');
       navigate('/expedientes');
     } catch (error) {
-      showMsg('danger', error.message);
+      ReactSwal.close();
+      await errorAlert('Error al anular', error.message);
     }
   };
 
   // Guardar hallazgo (nuevo o editado) con sus evidencias (subir a Storage)
   const handleSaveHallazgo = async (hallazgoData) => {
     try {
+      ReactSwal.fire({
+        title: 'Guardando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
+      });
+
       const hallazgoParaGuardar = {
         expediente_id: id,
         fecha_deteccion: hallazgoData.fecha_deteccion,
@@ -418,46 +480,62 @@ export default function ExpedienteDetalle() {
         estado: hallazgoData.estado || 'ABIERTO',
       };
 
-      // Si es edición, el hallazgo tiene id; si no, no
+      let hallazgoGuardado;
+
       if (editingHallazgo) {
-        // Actualizar hallazgo existente
-        // Para simplificar, usaremos updateExpediente (que reemplaza todos los hallazgos)
-        // Pero mejor sería tener un servicio específico. Por ahora, haremos:
-        const hallazgosActualizados = expedienteActual.hallazgos.map(h =>
-          h.id === editingHallazgo.id ? { ...hallazgoParaGuardar, id: h.id, evidencias: h.evidencias || [] } : h
-        );
-        // Actualizar el expediente completo con los nuevos hallazgos
-        await actualizarExpediente(id, {
-          ...editData,
-          hallazgos: hallazgosActualizados,
-        });
+        // Actualizar existente
+        hallazgoGuardado = await updateHallazgo(editingHallazgo.id, hallazgoParaGuardar);
       } else {
-        // Nuevo hallazgo: agregar a la lista
-        const nuevosHallazgos = [...(expedienteActual.hallazgos || []), hallazgoParaGuardar];
-        await actualizarExpediente(id, {
-          ...editData,
-          hallazgos: nuevosHallazgos,
-        });
+        // Crear nuevo
+        hallazgoGuardado = await createHallazgo(hallazgoParaGuardar);
       }
-      showMsg('success', 'Hallazgo guardado');
+
+      // Subir evidencias (si hay archivos nuevos)
+      if (hallazgoData.evidencias && hallazgoData.evidencias.length > 0) {
+        for (const ev of hallazgoData.evidencias) {
+          if (ev.archivo) {
+            await uploadEvidencia(expedienteActual.codigo_orden,hallazgoGuardado.id, ev.archivo, ev.descripcion || '');
+          }
+        }
+      }
+
+      // RECARGAR EL EXPEDIENTE PARA REFLEJAR CAMBIOS
+      await refreshExpedienteActual(id);
+      ReactSwal.close();
+      toast('success', 'Hallazgo guardado correctamente');
       setHallazgoModalOpen(false);
       setEditingHallazgo(null);
     } catch (error) {
-      showMsg('danger', error.message);
+      console.error('Error en handleSaveHallazgo:', error);
+      await errorAlert('Error al guardar', error.message);
     }
   };
 
   const handleDeleteHallazgo = async (hallazgoId) => {
-    if (!window.confirm('¿Eliminar este hallazgo?')) return;
+
+    const result = await confirm(
+      'Eliminar Hallazgo',
+      '¿Estás seguro de que deseas eliminar este hallazgo? Esta acción no se puede deshacer.'
+    );
+    if (!result.isConfirmed) return;
     try {
-      const hallazgosFiltrados = expedienteActual.hallazgos.filter(h => h.id !== hallazgoId);
-      await actualizarExpediente(id, {
-        ...editData,
-        hallazgos: hallazgosFiltrados,
+      ReactSwal.fire({
+        title: 'Guardando...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          ReactSwal.showLoading();
+        }
       });
-      showMsg('success', 'Hallazgo eliminado');
+
+      await deleteHallazgo(hallazgoId);
+      // RECARGAR EL EXPEDIENTE PARA REFLEJAR CAMBIOS
+      await refreshExpedienteActual(id);
+      ReactSwal.close();
+      toast('success', 'Hallazgo eliminado');
     } catch (error) {
-      showMsg('danger', error.message);
+      console.error('Error en handleDeleteHallazgo:', error);
+      ReactSwal.close();
+      await errorAlert('Error al eliminar', error.message);
     }
   };
 
@@ -509,9 +587,10 @@ export default function ExpedienteDetalle() {
       {/* Cabecera del reporte */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{exp.expediente_id}</h1>
+              <FolderOpen className="w-5 h-5 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">{exp.expediente_id} </h1>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <Badge variant={badge.variant}>{badge.label}</Badge>
                 <span className="text-sm text-muted-foreground">
@@ -532,14 +611,14 @@ export default function ExpedienteDetalle() {
             <div className="text-sm text-muted-foreground text-right">
               <p><span className="font-medium">Código Orden:</span> {exp.codigo_orden}</p>
               <p><span className="font-medium">Mes:</span> {exp.mes_produccion} / {exp.anio_produccion}</p>
-              <p><span className="font-medium">Consecutivo:</span> {exp.consecutivo}</p>
+              <p><span className="font-medium">Piezas Producidas:</span> {exp.cantidad_producida} Pzs</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Datos generales */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Cliente</CardTitle>
@@ -556,20 +635,17 @@ export default function ExpedienteDetalle() {
             <p className="text-lg font-semibold">{exp.producto || '—'}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Cantidad Producida</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-semibold">{exp.cantidad_producida || 0}</p>
-          </CardContent>
-        </Card>
+
       </div>
 
       {/* Hallazgos */}
+      {/* Sección Hallazgos - NUEVO DISEÑO */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Hallazgos ({exp.hallazgos?.length || 0})</h2>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            Hallazgos ({exp.hallazgos?.length || 0})
+          </h2>
           {!isReadOnly && (
             <Button onClick={() => { setEditingHallazgo(null); setHallazgoModalOpen(true); }} className="gap-2">
               <Plus className="w-4 h-4" />
@@ -580,88 +656,165 @@ export default function ExpedienteDetalle() {
 
         {exp.hallazgos && exp.hallazgos.length > 0 ? (
           <div className="space-y-4">
-            {exp.hallazgos.map((hallazgo, idx) => (
-              <Card key={hallazgo.id || idx}>
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">Hallazgo #{idx + 1}</span>
-                        <Badge variant="outline">{hallazgo.estado || 'ABIERTO'}</Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(hallazgo.fecha_deteccion).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 text-sm text-muted-foreground">
-                        <p><span className="font-medium">Proceso:</span> {getCatalogoNombre(hallazgo.proceso_id)}</p>
-                        <p><span className="font-medium">Máquina:</span> {getCatalogoNombre(hallazgo.maquina_id)}</p>
-                        <p><span className="font-medium">Defecto:</span> {getCatalogoNombre(hallazgo.defecto_id)}</p>
-                        <p><span className="font-medium">Categoría:</span> {getCatalogoNombre(hallazgo.categoria_id)}</p>
-                        <p><span className="font-medium">Acción:</span> {getCatalogoNombre(hallazgo.accion_id)}</p>
-                        <p><span className="font-medium">Detectadas:</span> {hallazgo.piezas_detectadas || 0}</p>
-                        <p><span className="font-medium">Recuperadas:</span> {hallazgo.piezas_recuperadas || 0}</p>
-                        <p><span className="font-medium">Rechazadas:</span> {hallazgo.piezas_rechazadas || 0}</p>
-                        {hallazgo.responsable && <p><span className="font-medium">Responsable:</span> {hallazgo.responsable}</p>}
-                      </div>
-                      {hallazgo.observaciones && (
-                        <p className="text-sm text-muted-foreground mt-1">{hallazgo.observaciones}</p>
-                      )}
-                    </div>
-                    {!isReadOnly && (
-                      <div className="flex gap-1 flex-shrink-0">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => { setEditingHallazgo(hallazgo); setHallazgoModalOpen(true); }}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteHallazgo(hallazgo.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  {/* Evidencias del hallazgo */}
-                  {hallazgo.evidencias && hallazgo.evidencias.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs text-muted-foreground mb-1">Evidencias:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {hallazgo.evidencias.map((ev) => (
-                          <div key={ev.id} className="relative group">
-                            <img
-                              src={ev.ruta_archivo}
-                              alt={ev.nombre_archivo}
-                              className="w-16 h-16 object-cover rounded-lg border border-border"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-                              <a
-                                href={ev.ruta_archivo}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-white hover:text-primary"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </a>
+            {exp.hallazgos.map((hallazgo, idx) => {
+              // Calcular total de piezas afectadas
+              const totalPiezas = (hallazgo.piezas_detectadas || 0) +
+                                  (hallazgo.piezas_recuperadas || 0) +
+                                  (hallazgo.piezas_rechazadas || 0);
+              // Badge de estado
+              const estadoBadge = ESTADO_BADGE[hallazgo.estado] || { variant: 'secondary', label: hallazgo.estado };
+
+              return (
+                <Card
+                  key={hallazgo.id || idx}
+                  className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 group"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      {/* Columna izquierda: información principal */}
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        {/* Icono */}
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center flex-shrink-0 mt-1">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        </div>
+
+                        {/* Contenido */}
+                        <div className="min-w-0 flex-1">
+                          {/* Encabezado: número y estado */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-foreground">
+                               #{idx + 1} - {getCatalogoNombre(hallazgo.defecto_id) || '—'}
+                            </span>
+                            
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDateSpanish(hallazgo.fecha_deteccion)}
+                            </span>
+                            <Badge variant={estadoBadge.variant}>
+                              {estadoBadge.label}
+                            </Badge>
+                            {hallazgo.responsable && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                {hallazgo.responsable}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Grid de detalles (similar a expedientes) */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Wrench className="w-3.5 h-3.5" />
+                              <span className="font-medium">Proceso:</span>
+                              <span className="text-foreground">{getCatalogoNombre(hallazgo.proceso_id) || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Cpu className="w-3.5 h-3.5" />
+                              <span className="font-medium">Máquina:</span>
+                              <span className="text-foreground">{getCatalogoNombre(hallazgo.maquina_id) || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Layers className="w-3.5 h-3.5" />
+                              <span className="font-medium">Categoría:</span>
+                              <span className="text-foreground">{getCatalogoNombre(hallazgo.categoria_id) || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Zap className="w-3.5 h-3.5" />
+                              <span className="font-medium">Acción:</span>
+                              <span className="text-foreground">{getCatalogoNombre(hallazgo.accion_id) || '—'}</span>
+                            </div>
+                            {/* Resumen de piezas */}
+                            <div className="flex items-center gap-2 text-muted-foreground col-span-2 md:col-span-1">
+                              <Package className="w-3.5 h-3.5" />
+                              <span className="font-medium">Piezas:</span>
+                              <span className="text-foreground">
+                                {hallazgo.piezas_detectadas || 0} detectadas
+                                {hallazgo.piezas_recuperadas > 0 && ` · ${hallazgo.piezas_recuperadas} recuperadas`}
+                                {hallazgo.piezas_rechazadas > 0 && ` · ${hallazgo.piezas_rechazadas} rechazadas`}
+                              </span>
                             </div>
                           </div>
-                        ))}
+
+                          {/* Observaciones */}
+                          {hallazgo.observaciones && (
+                            <div className="mt-2 text-sm text-muted-foreground flex items-start gap-1.5">
+                              <FileText className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                              <span className="italic">{hallazgo.observaciones}</span>
+                            </div>
+                          )}
+
+                          {/* Evidencias (miniaturas) */}
+                          {hallazgo.evidencias && hallazgo.evidencias.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {hallazgo.evidencias.map((ev) => (
+                                <div key={ev.id} className="relative group/ev">
+                                  <img
+                                    src={ev.ruta_archivo}
+                                    alt={ev.nombre_archivo}
+                                    className="w-14 h-14 object-cover rounded-lg border border-border hover:border-primary transition-all"
+                                  />
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/ev:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                    <a
+                                      href={ev.ruta_archivo}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-white hover:text-primary"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </a>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Columna derecha: botones de acción */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {!isReadOnly && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => { setEditingHallazgo(hallazgo); setHallazgoModalOpen(true); }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteHallazgo(hallazgo.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              <p>No hay hallazgos registrados para este expediente.</p>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">No hay hallazgos registrados para este expediente.</p>
+              {!isReadOnly && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => { setEditingHallazgo(null); setHallazgoModalOpen(true); }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Crear primer hallazgo
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}

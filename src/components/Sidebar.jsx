@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { cn } from '../lib/utils.js';
 import {
   LayoutDashboard, FolderOpen, BarChart2,
-  ClipboardList, FileText, Settings, LogOut, ShieldCheck
+  ClipboardList, FileText, Settings, LogOut, ShieldCheck, Truck  // <-- AGREGAR Truck
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/indicadores',  label: 'Indicadores',    Icon: BarChart2 },
   { to: '/ordenes',      label: 'Órdenes',        Icon: ClipboardList },
   { to: '/reportes',     label: 'Reportes',       Icon: FileText },
+  { to: '/recepciones',  label: 'Recepciones',    Icon: Truck },          // <-- AGREGADO
   { to: '/configuracion',label: 'Configuración',  Icon: Settings },
 ];
 

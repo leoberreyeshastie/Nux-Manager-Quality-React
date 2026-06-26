@@ -9,6 +9,9 @@ import Ordenes from './pages/Ordenes.jsx';
 import Reportes from './pages/Reportes.jsx';
 import Configuracion from './pages/Configuracion.jsx';
 import ExpedienteDetalle from './pages/ExpedienteDetalle';
+import Recepciones from './pages/Recepciones';
+import RecepcionDetalle from './pages/RecepcionDetalle';
+import RecepcionForm from './pages/RecepcionForm';
 
 export default function App() {
   return (
@@ -28,6 +31,10 @@ export default function App() {
                 <Route path="/ordenes" element={<Ordenes />} />
                 <Route path="/reportes" element={<Reportes />} />
                 <Route path="/configuracion" element={<Configuracion />} />
+                <Route path="/recepciones" element={<Recepciones />} />
+                <Route path="/recepciones/nuevo" element={<RecepcionForm />} />
+                <Route path="/recepciones/editar/:id" element={<RecepcionForm />} />
+                <Route path="/recepciones/:id" element={<RecepcionDetalle />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

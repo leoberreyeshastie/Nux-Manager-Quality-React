@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { CatalogosProvider } from './context/CatalogosContext.jsx';
 import { ExpedientesProvider } from './context/ExpedientesContext.jsx';
+import { RecepcionesProvider } from './context/RecepcionesContext.jsx';
 import App from './App.jsx';
 import './index.css';
 
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <CatalogosProvider>
           <ExpedientesProvider>
-            <App />
+            <RecepcionesProvider>
+              <App />
+            </RecepcionesProvider>
           </ExpedientesProvider>
         </CatalogosProvider>
       </AuthProvider>

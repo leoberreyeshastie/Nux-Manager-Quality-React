@@ -7,6 +7,7 @@ const TITLES = {
   '/indicadores':   { title: 'Indicadores',      sub: 'KPIs y métricas mensuales' },
   '/ordenes':       { title: 'Órdenes',          sub: 'Órdenes de producción' },
   '/reportes':      { title: 'Reportes',         sub: 'Generación de reportes' },
+  '/recepciones':      { title: 'Recepciones',         sub: 'Recepción de Materia Prima' },
   '/configuracion': { title: 'Configuración',    sub: 'Ajustes del sistema' },
 };
 

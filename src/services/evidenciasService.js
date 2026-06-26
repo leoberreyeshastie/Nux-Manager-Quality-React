@@ -1,10 +1,10 @@
 import { supabase } from './supabase';
 
 // Subir archivo a Storage y crear registro en evidencias
-export async function uploadEvidencia(hallazgoId, file, descripcion = '', fechaCaptura = null) {
+export async function uploadEvidencia(codigo_orden,hallazgoId, file, descripcion = '', fechaCaptura = null) {
   // Comprimir la imagen antes de subir (lo haremos en el front, pero esta función solo sube)
   // Recibimos el file ya comprimido
-  const filePath = `evidencias/${hallazgoId}/${Date.now()}_${file.name}`;
+  const filePath = `${codigo_orden}/${Date.now()}_${file.name}`;
   
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('evidencias') // nombre del bucket
@@ -12,7 +12,7 @@ export async function uploadEvidencia(hallazgoId, file, descripcion = '', fechaC
       cacheControl: '3600',
       upsert: false
     });
-
+  
   if (uploadError) throw uploadError;
 
   // Obtener URL pública
@@ -31,7 +31,7 @@ export async function uploadEvidencia(hallazgoId, file, descripcion = '', fechaC
     tamano_kb: Math.round(file.size / 1024),
     fecha_captura: fechaCaptura || new Date().toISOString().split('T')[0]
   };
-
+  console.log(evidencia);
   const { data: evidenciaData, error: evError } = await supabase
     .from('evidencias')
     .insert([evidencia])
@@ -43,8 +43,7 @@ export async function uploadEvidencia(hallazgoId, file, descripcion = '', fechaC
 }
 
 export async function deleteEvidencia(id, rutaArchivo) {
-  // Extraer la ruta del bucket de la URL pública
-  // Suponiendo que la URL es algo como: https://.../storage/v1/object/public/evidencias/...
+  // Extraer la ruta del bucket desde la URL pública
   const url = new URL(rutaArchivo);
   const pathParts = url.pathname.split('/');
   const bucketIndex = pathParts.indexOf('evidencias');
