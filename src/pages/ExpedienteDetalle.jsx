@@ -166,7 +166,7 @@ function HallazgoModal({ open, onClose, hallazgo, onSave, catalogos, expedienteI
     onClose();
   };
 
-  // Función segura para obtener opciones de catálogo
+  //Función segura para obtener opciones de catálogo
   const catalogoOptions = (codigoTipo) => {
     if (!catalogos || !catalogos[codigoTipo]) return [];
     return catalogos[codigoTipo].map(item => ({ value: item.id, label: item.nombre }));
@@ -589,8 +589,17 @@ export default function ExpedienteDetalle() {
         <CardContent className="p-6">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <FolderOpen className="w-5 h-5 text-primary" />
-              <h1 className="text-2xl font-bold text-foreground">{exp.expediente_id} </h1>
+
+            
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <FolderOpen className="w-5 h-5 text-primary" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground">
+                  
+                  {exp.expediente_id} 
+                </h1>
+              </div>
               <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <Badge variant={badge.variant}>{badge.label}</Badge>
                 <span className="text-sm text-muted-foreground">

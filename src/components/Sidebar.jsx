@@ -26,7 +26,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-64 min-w-[16rem] min-h-screen bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
+    <aside className="flex flex-col w-64 h-full bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
         <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
           <ShieldCheck className="w-5 h-5 text-primary" />
